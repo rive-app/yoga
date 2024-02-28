@@ -187,7 +187,7 @@ YOGA_EXPORT void YGNodeMarkDirtyAndPropagateToDescendants(
 
 int32_t gConfigInstanceCount = 0;
 
-YOGA_EXPORT WIN_EXPORT YGNodeRef YGNodeNewWithConfig(const YGConfigRef config) {
+YOGA_EXPORT YGNodeRef YGNodeNewWithConfig(const YGConfigRef config) {
   const YGNodeRef node = new YGNode{config};
   YGAssert(config != nullptr, "Tried to construct YGNode with null config");
   YGAssertWithConfig(
@@ -4230,7 +4230,8 @@ YOGA_EXPORT void YGNodeCalculateLayoutWithContext(
     if (node->getConfig()->shouldPrintTree()) {
       YGNodePrint(
           node,
-          (YGPrintOptions) (YGPrintOptionsLayout | YGPrintOptionsChildren | YGPrintOptionsStyle));
+          (YGPrintOptions) (YGPrintOptionsLayout | YGPrintOptionsChildren |
+                            YGPrintOptionsStyle));
     }
 #endif
   }

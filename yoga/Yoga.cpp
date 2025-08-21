@@ -4284,6 +4284,7 @@ void YGAssertWithNode(
     const char* message) {
   if (!condition) {
     Log::log(node, YGLogLevelFatal, nullptr, "%s\n", message);
+    node->setHasError(true);
     throwLogicalErrorWithMessage(message);
   }
 }

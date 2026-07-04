@@ -16,6 +16,7 @@
 
 #include "CompactValue.h"
 #include "YGFloatOptional.h"
+#include "YGGridTrack.h"
 #include "Yoga-internal.h"
 #include "BitUtils.h"
 
@@ -119,6 +120,18 @@ private:
   Dimensions maxDimensions_ = {};
   // Yoga specific properties, not compatible with flexbox specification
   YGFloatOptional aspectRatio_ = {};
+
+  // rive: grid style backport (facebook/yoga PR #1893)
+  YGJustify justifyItems_ = YGJustifyStretch;
+  YGJustify justifySelf_ = YGJustifyAuto;
+  facebook::yoga::GridTrackList gridTemplateColumns_ = {};
+  facebook::yoga::GridTrackList gridTemplateRows_ = {};
+  facebook::yoga::GridTrackList gridAutoColumns_ = {};
+  facebook::yoga::GridTrackList gridAutoRows_ = {};
+  facebook::yoga::GridLine gridColumnStart_ = {};
+  facebook::yoga::GridLine gridColumnEnd_ = {};
+  facebook::yoga::GridLine gridRowStart_ = {};
+  facebook::yoga::GridLine gridRowEnd_ = {};
 
 public:
   // for library users needing a type
@@ -230,6 +243,87 @@ public:
   // Yoga specific properties, not compatible with flexbox specification
   YGFloatOptional aspectRatio() const { return aspectRatio_; }
   Ref<YGFloatOptional, &YGStyle::aspectRatio_> aspectRatio() { return {*this}; }
+
+  // rive: grid style backport (facebook/yoga PR #1893)
+  YGJustify justifyItems() const { return justifyItems_; }
+  void setJustifyItems(YGJustify value) { justifyItems_ = value; }
+
+  YGJustify justifySelf() const { return justifySelf_; }
+  void setJustifySelf(YGJustify value) { justifySelf_ = value; }
+
+  // Grid Container Properties
+  const facebook::yoga::GridTrackList& gridTemplateColumns() const {
+    return gridTemplateColumns_;
+  }
+  void setGridTemplateColumns(facebook::yoga::GridTrackList value) {
+    gridTemplateColumns_ = std::move(value);
+  }
+  void resizeGridTemplateColumns(size_t count) {
+    gridTemplateColumns_.resize(count);
+  }
+  void setGridTemplateColumnAt(
+      size_t index,
+      facebook::yoga::GridTrackSize value) {
+    gridTemplateColumns_[index] = value;
+  }
+
+  const facebook::yoga::GridTrackList& gridTemplateRows() const {
+    return gridTemplateRows_;
+  }
+  void setGridTemplateRows(facebook::yoga::GridTrackList value) {
+    gridTemplateRows_ = std::move(value);
+  }
+  void resizeGridTemplateRows(size_t count) { gridTemplateRows_.resize(count); }
+  void setGridTemplateRowAt(size_t index, facebook::yoga::GridTrackSize value) {
+    gridTemplateRows_[index] = value;
+  }
+
+  const facebook::yoga::GridTrackList& gridAutoColumns() const {
+    return gridAutoColumns_;
+  }
+  void setGridAutoColumns(facebook::yoga::GridTrackList value) {
+    gridAutoColumns_ = std::move(value);
+  }
+  void resizeGridAutoColumns(size_t count) { gridAutoColumns_.resize(count); }
+  void setGridAutoColumnAt(size_t index, facebook::yoga::GridTrackSize value) {
+    gridAutoColumns_[index] = value;
+  }
+
+  const facebook::yoga::GridTrackList& gridAutoRows() const {
+    return gridAutoRows_;
+  }
+  void setGridAutoRows(facebook::yoga::GridTrackList value) {
+    gridAutoRows_ = std::move(value);
+  }
+  void resizeGridAutoRows(size_t count) { gridAutoRows_.resize(count); }
+  void setGridAutoRowAt(size_t index, facebook::yoga::GridTrackSize value) {
+    gridAutoRows_[index] = value;
+  }
+
+  // Grid Item Properties
+  const facebook::yoga::GridLine& gridColumnStart() const {
+    return gridColumnStart_;
+  }
+  void setGridColumnStart(facebook::yoga::GridLine value) {
+    gridColumnStart_ = value;
+  }
+
+  const facebook::yoga::GridLine& gridColumnEnd() const {
+    return gridColumnEnd_;
+  }
+  void setGridColumnEnd(facebook::yoga::GridLine value) {
+    gridColumnEnd_ = value;
+  }
+
+  const facebook::yoga::GridLine& gridRowStart() const {
+    return gridRowStart_;
+  }
+  void setGridRowStart(facebook::yoga::GridLine value) {
+    gridRowStart_ = value;
+  }
+
+  const facebook::yoga::GridLine& gridRowEnd() const { return gridRowEnd_; }
+  void setGridRowEnd(facebook::yoga::GridLine value) { gridRowEnd_ = value; }
 };
 
 YOGA_EXPORT bool operator==(const YGStyle& lhs, const YGStyle& rhs);

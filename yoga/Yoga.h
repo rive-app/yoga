@@ -299,6 +299,104 @@ YOGA_EXPORT YGValue YGNodeStyleGetMaxHeight(YGNodeConstRef node);
 YOGA_EXPORT void YGNodeStyleSetAspectRatio(YGNodeRef node, float aspectRatio);
 YOGA_EXPORT float YGNodeStyleGetAspectRatio(YGNodeConstRef node);
 
+// rive: grid style backport (facebook/yoga PR #1893)
+
+YOGA_EXPORT void YGNodeStyleSetJustifyItems(
+    YGNodeRef node,
+    YGJustify justifyItems);
+YOGA_EXPORT YGJustify YGNodeStyleGetJustifyItems(YGNodeConstRef node);
+
+YOGA_EXPORT void YGNodeStyleSetJustifySelf(YGNodeRef node, YGJustify justifySelf);
+YOGA_EXPORT YGJustify YGNodeStyleGetJustifySelf(YGNodeConstRef node);
+
+// Grid Item Properties
+YOGA_EXPORT void YGNodeStyleSetGridColumnStart(
+    YGNodeRef node,
+    int32_t gridColumnStart);
+YOGA_EXPORT void YGNodeStyleSetGridColumnStartAuto(YGNodeRef node);
+YOGA_EXPORT void YGNodeStyleSetGridColumnStartSpan(YGNodeRef node, int32_t span);
+YOGA_EXPORT int32_t YGNodeStyleGetGridColumnStart(YGNodeConstRef node);
+
+YOGA_EXPORT void YGNodeStyleSetGridColumnEnd(
+    YGNodeRef node,
+    int32_t gridColumnEnd);
+YOGA_EXPORT void YGNodeStyleSetGridColumnEndAuto(YGNodeRef node);
+YOGA_EXPORT void YGNodeStyleSetGridColumnEndSpan(YGNodeRef node, int32_t span);
+YOGA_EXPORT int32_t YGNodeStyleGetGridColumnEnd(YGNodeConstRef node);
+
+YOGA_EXPORT void YGNodeStyleSetGridRowStart(
+    YGNodeRef node,
+    int32_t gridRowStart);
+YOGA_EXPORT void YGNodeStyleSetGridRowStartAuto(YGNodeRef node);
+YOGA_EXPORT void YGNodeStyleSetGridRowStartSpan(YGNodeRef node, int32_t span);
+YOGA_EXPORT int32_t YGNodeStyleGetGridRowStart(YGNodeConstRef node);
+
+YOGA_EXPORT void YGNodeStyleSetGridRowEnd(YGNodeRef node, int32_t gridRowEnd);
+YOGA_EXPORT void YGNodeStyleSetGridRowEndAuto(YGNodeRef node);
+YOGA_EXPORT void YGNodeStyleSetGridRowEndSpan(YGNodeRef node, int32_t span);
+YOGA_EXPORT int32_t YGNodeStyleGetGridRowEnd(YGNodeConstRef node);
+
+// Grid Container Properties
+YOGA_EXPORT void YGNodeStyleSetGridTemplateColumnsCount(
+    YGNodeRef node,
+    size_t count);
+YOGA_EXPORT void YGNodeStyleSetGridTemplateColumn(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType type,
+    float value);
+YOGA_EXPORT void YGNodeStyleSetGridTemplateColumnMinMax(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType minType,
+    float minValue,
+    YGGridTrackType maxType,
+    float maxValue);
+
+YOGA_EXPORT void YGNodeStyleSetGridTemplateRowsCount(
+    YGNodeRef node,
+    size_t count);
+YOGA_EXPORT void YGNodeStyleSetGridTemplateRow(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType type,
+    float value);
+YOGA_EXPORT void YGNodeStyleSetGridTemplateRowMinMax(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType minType,
+    float minValue,
+    YGGridTrackType maxType,
+    float maxValue);
+
+YOGA_EXPORT void YGNodeStyleSetGridAutoColumnsCount(YGNodeRef node, size_t count);
+YOGA_EXPORT void YGNodeStyleSetGridAutoColumn(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType type,
+    float value);
+YOGA_EXPORT void YGNodeStyleSetGridAutoColumnMinMax(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType minType,
+    float minValue,
+    YGGridTrackType maxType,
+    float maxValue);
+
+YOGA_EXPORT void YGNodeStyleSetGridAutoRowsCount(YGNodeRef node, size_t count);
+YOGA_EXPORT void YGNodeStyleSetGridAutoRow(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType type,
+    float value);
+YOGA_EXPORT void YGNodeStyleSetGridAutoRowMinMax(
+    YGNodeRef node,
+    size_t index,
+    YGGridTrackType minType,
+    float minValue,
+    YGGridTrackType maxType,
+    float maxValue);
+
 YOGA_EXPORT float YGNodeLayoutGetLeft(YGNodeRef node);
 YOGA_EXPORT float YGNodeLayoutGetTop(YGNodeRef node);
 YOGA_EXPORT float YGNodeLayoutGetRight(YGNodeRef node);

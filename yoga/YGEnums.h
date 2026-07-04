@@ -24,7 +24,9 @@ YG_ENUM_SEQ_DECL(
     YGAlignStretch,
     YGAlignBaseline,
     YGAlignSpaceBetween,
-    YGAlignSpaceAround)
+    YGAlignSpaceAround,
+    YGAlignStart,
+    YGAlignEnd)
 
 YG_ENUM_SEQ_DECL(
     YGDimension,
@@ -40,7 +42,8 @@ YG_ENUM_SEQ_DECL(
 YG_ENUM_SEQ_DECL(
     YGDisplay,
     YGDisplayFlex,
-    YGDisplayNone)
+    YGDisplayNone,
+    YGDisplayGrid)
 
 YG_ENUM_SEQ_DECL(
     YGEdge,
@@ -76,6 +79,14 @@ YG_ENUM_SEQ_DECL(
     YGFlexDirectionRowReverse)
 
 YG_ENUM_SEQ_DECL(
+    YGGridTrackType,
+    YGGridTrackTypeAuto,
+    YGGridTrackTypePoints,
+    YGGridTrackTypePercent,
+    YGGridTrackTypeFr,
+    YGGridTrackTypeMinmax)
+
+YG_ENUM_SEQ_DECL(
     YGGutter,
     YGGutterColumn,
     YGGutterRow,
@@ -88,7 +99,12 @@ YG_ENUM_SEQ_DECL(
     YGJustifyFlexEnd,
     YGJustifySpaceBetween,
     YGJustifySpaceAround,
-    YGJustifySpaceEvenly)
+    YGJustifySpaceEvenly,
+    // rive: appended (upstream 3.x inserts Auto first) to keep existing values
+    YGJustifyAuto,
+    YGJustifyStretch,
+    YGJustifyStart,
+    YGJustifyEnd)
 
 YG_ENUM_SEQ_DECL(
     YGLogLevel,

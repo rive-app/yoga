@@ -52,5 +52,18 @@ bool operator==(const YGStyle& lhs, const YGStyle& rhs) {
         areNonFloatValuesEqual && lhs.aspectRatio() == rhs.aspectRatio();
   }
 
+  // rive: grid style backport (facebook/yoga PR #1893)
+  areNonFloatValuesEqual = areNonFloatValuesEqual &&
+      lhs.justifyItems() == rhs.justifyItems() &&
+      lhs.justifySelf() == rhs.justifySelf() &&
+      lhs.gridTemplateColumns() == rhs.gridTemplateColumns() &&
+      lhs.gridTemplateRows() == rhs.gridTemplateRows() &&
+      lhs.gridAutoColumns() == rhs.gridAutoColumns() &&
+      lhs.gridAutoRows() == rhs.gridAutoRows() &&
+      lhs.gridColumnStart() == rhs.gridColumnStart() &&
+      lhs.gridColumnEnd() == rhs.gridColumnEnd() &&
+      lhs.gridRowStart() == rhs.gridRowStart() &&
+      lhs.gridRowEnd() == rhs.gridRowEnd();
+
   return areNonFloatValuesEqual;
 }

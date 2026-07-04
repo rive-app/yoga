@@ -18,6 +18,7 @@
 #include "YGNode.h"
 #include "YGNodePrint.h"
 #include "Yoga-internal.h"
+#include "yoga/grid/GridLayout.h"
 #include "event/event.h"
 
 using namespace facebook::yoga;
@@ -758,6 +759,15 @@ YOGA_EXPORT void YGNodeStyleSetGap(
   updateIndexedStyleProp<MSVC_HINT(gap)>(node, &YGStyle::gap, gutter, length);
 }
 
+// rive: grid backport; percent gap resolution is grid-only in 2.x
+YOGA_EXPORT void YGNodeStyleSetGapPercent(
+    const YGNodeRef node,
+    const YGGutter gutter,
+    const float gapLength) {
+  auto length = detail::CompactValue::ofMaybe<YGUnitPercent>(gapLength);
+  updateIndexedStyleProp<MSVC_HINT(gap)>(node, &YGStyle::gap, gutter, length);
+}
+
 YOGA_EXPORT float YGNodeStyleGetGap(
     const YGNodeConstRef node,
     const YGGutter gutter) {
@@ -1355,7 +1365,7 @@ static const std::array<YGEdge, 4> pos = {{
 static const std::array<YGDimension, 4> dim = {
     {YGDimensionHeight, YGDimensionHeight, YGDimensionWidth, YGDimensionWidth}};
 
-static inline float YGNodePaddingAndBorderForAxis(
+float YGNodePaddingAndBorderForAxis(
     const YGNodeConstRef node,
     const YGFlexDirection axis,
     const float widthSize) {
@@ -1364,7 +1374,7 @@ static inline float YGNodePaddingAndBorderForAxis(
       .unwrap();
 }
 
-static inline YGAlign YGNodeAlignItem(const YGNode* node, const YGNode* child) {
+YGAlign YGNodeAlignItem(const YGNode* node, const YGNode* child) {
   const YGAlign align = child->getStyle().alignSelf() == YGAlignAuto
       ? node->getStyle().alignItems()
       : child->getStyle().alignSelf();
@@ -1375,7 +1385,7 @@ static inline YGAlign YGNodeAlignItem(const YGNode* node, const YGNode* child) {
   return align;
 }
 
-static float YGBaseline(const YGNodeRef node, void* layoutContext) {
+float YGBaseline(const YGNodeRef node, void* layoutContext) {
   if (node->hasBaselineFunc()) {
 
     Event::publish<Event::NodeBaselineStart>(node);
@@ -1509,7 +1519,7 @@ static YGFloatOptional YGNodeBoundAxisWithinMinAndMax(
 
 // Like YGNodeBoundAxisWithinMinAndMax but also ensures that the value doesn't
 // go below the padding and border amount.
-static inline float YGNodeBoundAxis(
+float YGNodeBoundAxis(
     const YGNodeRef node,
     const YGFlexDirection axis,
     const float value,
@@ -1522,7 +1532,7 @@ static inline float YGNodeBoundAxis(
       YGNodePaddingAndBorderForAxis(node, axis, widthSize));
 }
 
-static void YGNodeSetChildTrailingPosition(
+void YGNodeSetChildTrailingPosition(
     const YGNodeRef node,
     const YGNodeRef child,
     const YGFlexDirection axis) {
@@ -1533,7 +1543,7 @@ static void YGNodeSetChildTrailingPosition(
       trailing[axis]);
 }
 
-static void YGConstrainMaxSizeForMode(
+void YGConstrainMaxSizeForMode(
     const YGNodeConstRef node,
     const enum YGFlexDirection axis,
     const float ownerAxisSize,
@@ -1759,7 +1769,7 @@ static void YGNodeComputeFlexBasisForChild(
   child->setLayoutComputedFlexBasisGeneration(generationCount);
 }
 
-static void YGNodeAbsoluteLayoutChild(
+void YGNodeAbsoluteLayoutChild(
     const YGNodeRef node,
     const YGNodeRef child,
     const float width,
@@ -2178,7 +2188,7 @@ static bool YGNodeFixedSizeSetMeasuredDimensions(
   return false;
 }
 
-static void YGZeroOutLayoutRecursively(
+void YGZeroOutLayoutRecursively(
     const YGNodeRef node,
     void* layoutContext) {
   node->getLayout() = {};
@@ -2190,7 +2200,7 @@ static void YGZeroOutLayoutRecursively(
       YGZeroOutLayoutRecursively, layoutContext);
 }
 
-static float YGNodeCalculateAvailableInnerDim(
+float YGNodeCalculateAvailableInnerDim(
     const YGNodeConstRef node,
     const YGDimension dimension,
     const float availableDim,
@@ -3195,6 +3205,27 @@ static void YGNodelayoutImpl(
   // Reset layout flags, as they could have changed.
   node->setLayoutHadOverflow(false);
 
+  // rive: grid backport (facebook/yoga #1894)
+  if (node->getStyle().display() == YGDisplayGrid) {
+    facebook::yoga::calculateGridLayoutInternal(
+        node,
+        availableWidth,
+        availableHeight,
+        ownerDirection,
+        widthMeasureMode,
+        heightMeasureMode,
+        ownerWidth,
+        ownerHeight,
+        performLayout,
+        reason,
+        config,
+        layoutMarkerData,
+        layoutContext,
+        depth,
+        generationCount);
+    return;
+  }
+
   // STEP 1: CALCULATE VALUES FOR REMAINDER OF ALGORITHM
   const YGFlexDirection mainAxis =
       YGResolveFlexDirection(node->getStyle().flexDirection(), direction);
@@ -3655,6 +3686,7 @@ static void YGNodelayoutImpl(
         // rive: grid backport values; no-op in flexbox (matches upstream #1893)
         case YGAlignStart:
         case YGAlignEnd:
+        case YGAlignSpaceEvenly:
         case YGAlignAuto:
         case YGAlignFlexStart:
         case YGAlignBaseline:
@@ -3723,6 +3755,7 @@ static void YGNodelayoutImpl(
               // rive: grid backport values; not yet implemented (upstream #1893)
               case YGAlignStart:
               case YGAlignEnd:
+              case YGAlignSpaceEvenly:
                 break;
               case YGAlignFlexStart: {
                 child->setLayoutPosition(

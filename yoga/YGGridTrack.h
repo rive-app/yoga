@@ -104,11 +104,6 @@ struct GridTrackSize {
   StyleSizeLength minSizingFunction;
   StyleSizeLength maxSizingFunction;
 
-  // Layout state used by the track sizing algorithm; not part of the style.
-  float baseSize = 0.0f;
-  float growthLimit = 0.0f;
-  bool infinitelyGrowable = false;
-
   constexpr GridTrackSize() = default;
   constexpr GridTrackSize(StyleSizeLength min, StyleSizeLength max)
       : minSizingFunction(min), maxSizingFunction(max) {}
@@ -140,7 +135,6 @@ struct GridTrackSize {
     return GridTrackSize{min, max};
   }
 
-  // Layout state fields intentionally excluded.
   bool operator==(const GridTrackSize& other) const {
     return minSizingFunction == other.minSizingFunction &&
         maxSizingFunction == other.maxSizingFunction;

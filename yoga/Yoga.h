@@ -249,6 +249,10 @@ YOGA_EXPORT void YGNodeStyleSetGap(
     YGNodeRef node,
     YGGutter gutter,
     float gapLength);
+YOGA_EXPORT void YGNodeStyleSetGapPercent(
+    YGNodeRef node,
+    YGGutter gutter,
+    float gapLength);
 YOGA_EXPORT float YGNodeStyleGetGap(YGNodeConstRef node, YGGutter gutter);
 
 YOGA_EXPORT void YGNodeStyleSetWidth(YGNodeRef node, float width);

@@ -31,6 +31,8 @@ const char* YGAlignToString(const YGAlign value) {
       return "start";
     case YGAlignEnd:
       return "end";
+    case YGAlignSpaceEvenly:
+      return "space-evenly";
   }
   return "unknown";
 }

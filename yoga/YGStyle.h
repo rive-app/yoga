@@ -324,6 +324,42 @@ public:
 
   const facebook::yoga::GridLine& gridRowEnd() const { return gridRowEnd_; }
   void setGridRowEnd(facebook::yoga::GridLine value) { gridRowEnd_ = value; }
+
+  // rive: yoga 3.x-style computed accessors used by the grid backport (#1894)
+  float computeMarginForAxis(YGFlexDirection axis, float widthSize) const;
+  float computeInlineStartMargin(
+      YGFlexDirection axis,
+      YGDirection direction,
+      float widthSize) const;
+  float computeInlineEndMargin(
+      YGFlexDirection axis,
+      YGDirection direction,
+      float widthSize) const;
+  float computeInlineStartPadding(
+      YGFlexDirection axis,
+      YGDirection direction,
+      float widthSize) const;
+  float computeInlineStartBorder(YGFlexDirection axis, YGDirection direction)
+      const;
+  bool inlineStartMarginIsAuto(YGFlexDirection axis, YGDirection direction)
+      const;
+  bool inlineEndMarginIsAuto(YGFlexDirection axis, YGDirection direction)
+      const;
+  float computeGapForDimension(YGDimension dimension, float availableSize)
+      const;
+  YGFloatOptional resolvedMinDimension(
+      YGDirection direction,
+      YGDimension dimension,
+      float referenceLength,
+      float ownerWidth) const;
+  YGFloatOptional resolvedMaxDimension(
+      YGDirection direction,
+      YGDimension dimension,
+      float referenceLength,
+      float ownerWidth) const;
+  facebook::yoga::StyleSizeLength dimension(YGDimension dimension) const;
+  facebook::yoga::StyleSizeLength minDimension(YGDimension dimension) const;
+  facebook::yoga::StyleSizeLength maxDimension(YGDimension dimension) const;
 };
 
 YOGA_EXPORT bool operator==(const YGStyle& lhs, const YGStyle& rhs);

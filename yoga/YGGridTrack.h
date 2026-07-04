@@ -186,3 +186,12 @@ struct GridLine {
 
 } // namespace yoga
 } // namespace facebook
+
+// 2.x convention: public yoga types live in the global namespace (YGStyle,
+// YGNode). Aliases so consumers don't need facebook::yoga::.
+// (GridTrackList deliberately has no alias; YGGridTrackList is taken by the
+// C API's opaque list builder.)
+using YGStyleSizeLength = facebook::yoga::StyleSizeLength;
+using YGGridTrackSize = facebook::yoga::GridTrackSize;
+using YGGridLine = facebook::yoga::GridLine;
+using YGGridLineType = facebook::yoga::GridLineType;

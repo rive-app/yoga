@@ -134,7 +134,6 @@ void calculateGridLayoutInternal(
   auto& rowTracks = gridTracks.rowTracks;
   auto& columnTracks = gridTracks.columnTracks;
   auto& gridItems = autoPlacement.gridItems;
-  auto& baselineItemGroups = autoPlacement.baselineItemGroups;
   bool needsSecondTrackSizingPass = true;
 
   if (!widthIsDefinite || !heightIsDefinite) {
@@ -154,8 +153,7 @@ void calculateGridLayoutInternal(
         depth,
         generationCount,
         config,
-        layoutContext,
-        baselineItemGroups);
+        layoutContext);
 
     trackSizing.runGridSizingAlgorithm();
 
@@ -245,8 +243,7 @@ void calculateGridLayoutInternal(
       depth,
       generationCount,
       config,
-      layoutContext,
-      baselineItemGroups);
+      layoutContext);
 
   // Step 3: Given the resulting grid container size, run the Grid Sizing
   // Algorithm to size the grid. Run track sizing with the new container
@@ -447,8 +444,6 @@ void calculateGridLayoutInternal(
       alignSelfOffset = freeSpaceBlockAxisItem;
     } else if (alignSelf == YGAlignCenter) {
       alignSelfOffset = freeSpaceBlockAxisItem / 2;
-    } else if (alignSelf == YGAlignBaseline) {
-      alignSelfOffset = item.baselineShim;
     }
 
     float finalTop = gridItemBlockStart + marginBlockStart +

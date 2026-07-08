@@ -13,7 +13,6 @@
 #include <array>
 #include <algorithm>
 #include <cstdint>
-#include <map>
 #include <utility>
 #include <vector>
 
@@ -517,9 +516,6 @@ struct GridItem {
   size_t rowStart;
   size_t rowEnd;
   YGNode* node;
-  // additional space added to align baselines
-  // https://www.w3.org/TR/css-grid-1/#algo-baseline-shims
-  float baselineShim = 0.0f;
   // Flags used for optimisations in TrackSizing
   bool crossesIntrinsicRow = false;
   bool crossesIntrinsicColumn = false;
@@ -531,14 +527,12 @@ struct GridItem {
       size_t columnEnd,
       size_t rowStart,
       size_t rowEnd,
-      YGNode* node,
-      float baselineShim = 0.0f)
+      YGNode* node)
       : columnStart(columnStart),
         columnEnd(columnEnd),
         rowStart(rowStart),
         rowEnd(rowEnd),
-        node(node),
-        baselineShim(baselineShim) {}
+        node(node) {}
 
   bool crossesIntrinsicTrack(YGDimension dimension) const {
     return dimension == YGDimensionWidth ? crossesIntrinsicColumn
@@ -550,14 +544,8 @@ struct GridItem {
   }
 };
 
-// Baseline sharing groups - items grouped by their starting row for resolve
-// intrinsic size step in TrackSizing
-// https://www.w3.org/TR/css-grid-1/#algo-baseline-shims
-using BaselineItemGroups = std::map<size_t, std::vector<GridItem*>>;
-
 struct ResolvedAutoPlacement {
   std::vector<GridItem> gridItems;
-  BaselineItemGroups baselineItemGroups;
   int32_t minColumnStart;
   int32_t minRowStart;
   int32_t maxColumnEnd;
@@ -576,9 +564,6 @@ struct ResolvedAutoPlacement {
     std::vector<GridItem> resolvedAreas;
     resolvedAreas.reserve(autoPlacement.gridItems.size());
 
-    BaselineItemGroups baselineGroups;
-    auto alignItems = node->style().alignItems();
-
     for (auto& placement : autoPlacement.gridItems) {
       resolvedAreas.emplace_back(
           static_cast<size_t>(placement.columnStart - minColumnStart),
@@ -587,23 +572,12 @@ struct ResolvedAutoPlacement {
           static_cast<size_t>(placement.rowEnd - minRowStart),
           placement.node);
 
-      auto& item = resolvedAreas.back();
-      auto alignSelf = item.node->style().alignSelf();
-      if (alignSelf == YGAlignAuto) {
-        alignSelf = alignItems;
-      }
-      bool spansOneRow = (item.rowEnd - item.rowStart) == 1;
-      if (alignSelf == YGAlignBaseline && spansOneRow) {
-        baselineGroups[item.rowStart].push_back(&item);
-      }
-
       // TODO: find a better place to call this
       placement.node->processDimensions();
     }
 
     return ResolvedAutoPlacement{
         .gridItems = std::move(resolvedAreas),
-        .baselineItemGroups = std::move(baselineGroups),
         .minColumnStart = minColumnStart,
         .minRowStart = minRowStart,
         .maxColumnEnd = maxColumnEnd,

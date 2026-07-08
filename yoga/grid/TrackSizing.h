@@ -76,10 +76,6 @@ struct TrackSizing {
   bool hasIntrinsicTracks = false;
   bool hasFlexibleTracks = false;
 
-  // Pre-computed baseline sharing groups
-  BaselineItemGroups&
-      baselineItemGroups; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-
   TrackSizing(
       YGNode* node,
       std::vector<GridTrack>& columnTracks,
@@ -96,8 +92,7 @@ struct TrackSizing {
       uint32_t depth,
       uint32_t generationCount,
       YGConfigRef config,
-      void* layoutContext,
-      BaselineItemGroups& baselineItemGroups)
+      void* layoutContext)
       : node(node),
         columnTracks(columnTracks),
         rowTracks(rowTracks),
@@ -113,8 +108,7 @@ struct TrackSizing {
         depth(depth),
         generationCount(generationCount),
         config(config),
-        layoutContext(layoutContext),
-        baselineItemGroups(baselineItemGroups) {}
+        layoutContext(layoutContext) {}
 
   // 11.1. Grid Sizing Algorithm
   // https://www.w3.org/TR/css-grid-1/#algo-grid-sizing
@@ -251,11 +245,7 @@ struct TrackSizing {
   void resolveIntrinsicTrackSizes(YGDimension dimension) {
     auto& tracks = dimension == YGDimensionWidth ? columnTracks : rowTracks;
 
-    // Step 1: Shim baseline-aligned items (only for height dimension i.e.
-    // align-items/align-self)
-    if (dimension == YGDimensionHeight) {
-      shimBaselineAlignedItems();
-    }
+    // rive: baseline shimming removed — Rive never uses baseline alignment.
 
     // Fast path - if tracks are fixed-sized, skip below steps
     if (hasOnlyFixedTracks) {
@@ -273,63 +263,6 @@ struct TrackSizing {
     for (auto& track : tracks) {
       if (track.growthLimit == INFINITY) {
         track.growthLimit = track.baseSize;
-      }
-    }
-  }
-
-  // https://www.w3.org/TR/css-grid-1/#algo-baseline-shims
-  void shimBaselineAlignedItems() {
-    for (const auto& [rowIndex, items] : baselineItemGroups) {
-      float maxBaselineWithMargin = 0.0f;
-      std::vector<std::pair<GridItem*, float>> itemBaselines;
-      itemBaselines.reserve(items.size());
-
-      for (auto* itemPtr : items) {
-        const auto& item = *itemPtr;
-
-        if (itemSizeDependsOnIntrinsicTracks(item)) {
-          continue;
-        }
-
-        float containingBlockWidth = crossDimensionEstimator
-            ? crossDimensionEstimator(item)
-            : YGUndefined;
-        float containingBlockHeight = YGUndefined;
-
-        auto itemConstraints = calculateItemConstraints(
-            item, containingBlockWidth, containingBlockHeight);
-
-        YGLayoutNodeInternal(
-            item.node,
-            itemConstraints.width,
-            itemConstraints.height,
-            node->getLayout().direction(),
-            YGMeasureModeUndefined,
-            itemConstraints.heightSizingMode,
-            itemConstraints.containingBlockWidth,
-            itemConstraints.containingBlockHeight,
-            true,
-            LayoutPassReason::kGridLayout,
-            config,
-            layoutMarkerData,
-            layoutContext,
-            depth + 1,
-            generationCount);
-
-        const float baseline = YGBaseline(item.node, layoutContext);
-        const float marginTop = item.node->style().computeInlineStartMargin(
-            YGFlexDirectionColumn,
-            direction,
-            itemConstraints.containingBlockWidth);
-        const float baselineWithMargin = baseline + marginTop;
-
-        itemBaselines.emplace_back(itemPtr, baselineWithMargin);
-        maxBaselineWithMargin =
-            std::max(maxBaselineWithMargin, baselineWithMargin);
-      }
-
-      for (auto& [itemPtr, baselineWithMargin] : itemBaselines) {
-        itemPtr->baselineShim = maxBaselineWithMargin - baselineWithMargin;
       }
     }
   }
@@ -1329,9 +1262,6 @@ struct TrackSizing {
     float contribution =
         measureItem(item, dimension, itemConstraints) + marginForAxis;
 
-    if (dimension == YGDimensionHeight) {
-      contribution += item.baselineShim;
-    }
     return contribution;
   }
 
@@ -1347,9 +1277,6 @@ struct TrackSizing {
     float contribution =
         measureItem(item, dimension, itemConstraints) + marginForAxis;
 
-    if (dimension == YGDimensionHeight) {
-      contribution += item.baselineShim;
-    }
     return contribution;
   }
 
@@ -1395,9 +1322,6 @@ struct TrackSizing {
           marginForAxis;
     }
 
-    if (dimension == YGDimensionHeight) {
-      contribution += item.baselineShim;
-    }
     return contribution;
   }
 

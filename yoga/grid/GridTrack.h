@@ -16,6 +16,14 @@ struct GridTrack : GridTrackSize {
   float growthLimit = 0.0f;
   bool infinitelyGrowable = false;
 
+  // Transient per-pass scratch used by the track-sizing distribution steps.
+  // Not part of grid state; each pass resets these before reading them. Kept
+  // on the track (rather than in per-track hash maps/sets) to avoid the code
+  // size and allocations of instantiating unordered_map/set<GridTrack*>.
+  float plannedIncrease = 0.0f;
+  float itemIncurredIncrease = 0.0f;
+  bool frozen = false;
+
   explicit GridTrack(const GridTrackSize& trackSize)
       : GridTrackSize(trackSize) {}
 };

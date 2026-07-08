@@ -11,17 +11,29 @@
 #include "yoga/grid/YGGridCompat.h"
 #include "yoga/YGGridTrack.h"
 #include <array>
+#include <algorithm>
 #include <cstdint>
 #include <map>
-#include <unordered_map>
-#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace facebook::yoga {
 
 struct OccupancyGrid {
-  std::unordered_map<int32_t, std::vector<std::pair<int32_t, int32_t>>>
-      rowIntervals;
+  // Flat row -> column intervals. A grid has few rows, so a linear scan beats a
+  // hash map and avoids instantiating unordered_map<int, vector<pair>>.
+  using Intervals = std::vector<std::pair<int32_t, int32_t>>;
+  std::vector<std::pair<int32_t, Intervals>> rowIntervals;
+
+  Intervals& intervalsForRow(int32_t row) {
+    for (auto& entry : rowIntervals) {
+      if (entry.first == row) {
+        return entry.second;
+      }
+    }
+    rowIntervals.emplace_back(row, Intervals{});
+    return rowIntervals.back().second;
+  }
 
   void markOccupied(
       int32_t rowStart,
@@ -29,7 +41,7 @@ struct OccupancyGrid {
       int32_t colStart,
       int32_t colEnd) {
     for (int32_t row = rowStart; row < rowEnd; row++) {
-      rowIntervals[row].emplace_back(colStart, colEnd);
+      intervalsForRow(row).emplace_back(colStart, colEnd);
     }
   }
 
@@ -39,14 +51,16 @@ struct OccupancyGrid {
       int32_t colStart,
       int32_t colEnd) const {
     for (int32_t row = rowStart; row < rowEnd; row++) {
-      auto it = rowIntervals.find(row);
-      if (it == rowIntervals.end()) {
-        continue;
-      }
-      for (const auto& interval : it->second) {
-        if (interval.first < colEnd && interval.second > colStart) {
-          return true;
+      for (const auto& entry : rowIntervals) {
+        if (entry.first != row) {
+          continue;
         }
+        for (const auto& interval : entry.second) {
+          if (interval.first < colEnd && interval.second > colStart) {
+            return true;
+          }
+        }
+        break;
       }
     }
     return false;
@@ -193,7 +207,7 @@ struct AutoPlacement {
   static AutoPlacement performAutoPlacement(YGNode* node) {
     std::vector<AutoPlacementItem> gridItems;
     gridItems.reserve(node->getChildren().size());
-    std::unordered_set<YGNode*> placedItems;
+    std::vector<YGNode*> placedItems;
     placedItems.reserve(node->getChildren().size());
     int32_t minColumnStart = 0;
     int32_t minRowStart = 0;
@@ -213,7 +227,7 @@ struct AutoPlacement {
           gridItemArea.rowEnd > gridItemArea.rowStart,
           "Grid item row end must be greater than row start");
       gridItems.push_back(gridItemArea);
-      placedItems.insert(gridItemArea.node);
+      placedItems.push_back(gridItemArea.node);
       occupancy.markOccupied(
           gridItemArea.rowStart,
           gridItemArea.rowEnd,
@@ -277,7 +291,14 @@ struct AutoPlacement {
     // Step 2: Process the items locked to a given row.
     // Definite row positions only, exclude items with definite column
     // positions.
-    std::unordered_map<int32_t, int32_t> rowStartToColumnStartCache;
+    // Flat rowStart -> columnStart cache (few distinct rows; linear scan).
+    std::vector<std::pair<int32_t, int32_t>> rowStartToColumnStartCache;
+    auto findRowColumnCache = [&](int32_t r) {
+      return std::find_if(
+          rowStartToColumnStartCache.begin(),
+          rowStartToColumnStartCache.end(),
+          [r](const std::pair<int32_t, int32_t>& e) { return e.first == r; });
+    };
     for (auto child : node->getLayoutChildren()) {
       if (child->style().positionType() == YGPositionTypeAbsolute ||
           child->style().display() == YGDisplayNone) {
@@ -301,8 +322,9 @@ struct AutoPlacement {
         auto rowStart = rowPlacement.start;
         auto rowEnd = rowPlacement.end;
 
-        auto columnStart = rowStartToColumnStartCache.count(rowStart)
-            ? rowStartToColumnStartCache[rowStart]
+        auto cacheIt = findRowColumnCache(rowStart);
+        auto columnStart = cacheIt != rowStartToColumnStartCache.end()
+            ? cacheIt->second
             : minColumnStart;
 
         auto columnPlacement = GridItemTrackPlacement::resolveLinePlacement(
@@ -323,7 +345,12 @@ struct AutoPlacement {
             columnEnd = columnStart + columnSpan;
           } else {
             recordGridArea(gridItemArea);
-            rowStartToColumnStartCache[rowStart] = columnEnd;
+            auto writeIt = findRowColumnCache(rowStart);
+            if (writeIt != rowStartToColumnStartCache.end()) {
+              writeIt->second = columnEnd;
+            } else {
+              rowStartToColumnStartCache.emplace_back(rowStart, columnEnd);
+            }
             placed = true;
           }
         }
@@ -377,7 +404,8 @@ struct AutoPlacement {
         continue;
       }
 
-      if (!placedItems.count(child)) {
+      if (std::find(placedItems.begin(), placedItems.end(), child) ==
+          placedItems.end()) {
         auto gridItemColumnStart = child->style().gridColumnStart();
         auto gridItemColumnEnd = child->style().gridColumnEnd();
         auto hasDefiniteColumn =

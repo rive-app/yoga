@@ -9,9 +9,7 @@
 
 #include "yoga/grid/GridLayout.h"
 #include "yoga/YGGridTrack.h"
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
+#include <algorithm>
 
 namespace facebook::yoga {
 
@@ -588,24 +586,27 @@ struct TrackSizing {
     auto containerSize = dimension == YGDimensionWidth ? containerInnerWidth
                                                        : containerInnerHeight;
     auto gap = node->style().computeGapForDimension(dimension, containerSize);
-    std::unordered_map<GridTrack*, float> plannedIncrease;
-    plannedIncrease.reserve(gridItemSizeContributions.size());
 
     // 1. Maintain separately for each affected track a planned increase,
     // initially set to 0. (This prevents the size increases from becoming
-    // order-dependent.)
+    // order-dependent.) `plannedTracks` is the unique set of affected tracks,
+    // used to apply the planned increase in step 3.
+    std::vector<GridTrack*> plannedTracks;
     for (const auto& itemSizeContribution : gridItemSizeContributions) {
       for (auto& track : itemSizeContribution.affectedTracks) {
-        plannedIncrease[track] = 0.0f;
+        if (std::find(plannedTracks.begin(), plannedTracks.end(), track) ==
+            plannedTracks.end()) {
+          plannedTracks.push_back(track);
+          track->plannedIncrease = 0.0f;
+        }
       }
     }
 
     // 2. For each accommodated item, considering only tracks the item spans:
     for (const auto& itemSizeContribution : gridItemSizeContributions) {
-      std::unordered_map<GridTrack*, float> itemIncurredIncrease;
-      itemIncurredIncrease.reserve(itemSizeContribution.affectedTracks.size());
       for (auto& track : itemSizeContribution.affectedTracks) {
-        itemIncurredIncrease[track] = 0.0f;
+        track->itemIncurredIncrease = 0.0f;
+        track->frozen = false;
       }
 
       // 2.1 Find the space to distribute
@@ -630,20 +631,19 @@ struct TrackSizing {
 
       float spaceToDistribute = std::max(
           0.0f, itemSizeContribution.sizeContribution - totalSpannedTracksSize);
-      std::unordered_set<GridTrack*> frozenTracks;
-      frozenTracks.reserve(itemSizeContribution.affectedTracks.size());
+      size_t frozenCount = 0;
 
       // 2.2. Distribute space up to limits
-      while (frozenTracks.size() < itemSizeContribution.affectedTracks.size() &&
+      while (frozenCount < itemSizeContribution.affectedTracks.size() &&
              spaceToDistribute > 0.0f &&
              !inexactEquals(spaceToDistribute, 0.0f)) {
         auto unfrozenTrackCount =
-            itemSizeContribution.affectedTracks.size() - frozenTracks.size();
+            itemSizeContribution.affectedTracks.size() - frozenCount;
         auto distributionPerTrack =
             spaceToDistribute / static_cast<float>(unfrozenTrackCount);
 
         for (auto& track : itemSizeContribution.affectedTracks) {
-          if (frozenTracks.count(track)) {
+          if (track->frozen) {
             continue;
           }
 
@@ -664,20 +664,23 @@ struct TrackSizing {
             // marked infinitely growable, then each item-incurred increase will
             // be zero.
             if (!track->infinitelyGrowable) {
-              frozenTracks.insert(track);
+              track->frozen = true;
+              frozenCount++;
               continue;
             }
           }
 
           if (affectedSize + distributionPerTrack +
-                  itemIncurredIncrease[track] >
+                  track->itemIncurredIncrease >
               limit) {
-            frozenTracks.insert(track);
-            auto increase = limit - affectedSize - itemIncurredIncrease[track];
-            itemIncurredIncrease[track] += increase;
+            track->frozen = true;
+            frozenCount++;
+            auto increase =
+                limit - affectedSize - track->itemIncurredIncrease;
+            track->itemIncurredIncrease += increase;
             spaceToDistribute -= increase;
           } else {
-            itemIncurredIncrease[track] += distributionPerTrack;
+            track->itemIncurredIncrease += distributionPerTrack;
             spaceToDistribute -= distributionPerTrack;
           }
         }
@@ -711,7 +714,7 @@ struct TrackSizing {
           auto distributionPerTrack =
               spaceToDistribute / static_cast<float>(unfrozenTrackCount);
           for (auto& track : tracksToGrowBeyondLimits) {
-            itemIncurredIncrease[track] += distributionPerTrack;
+            track->itemIncurredIncrease += distributionPerTrack;
             spaceToDistribute -= distributionPerTrack;
           }
         }
@@ -721,14 +724,15 @@ struct TrackSizing {
       // larger than the track's planned increase set the track's planned
       // increase to that value.
       for (auto& track : itemSizeContribution.affectedTracks) {
-        if (itemIncurredIncrease[track] > plannedIncrease[track]) {
-          plannedIncrease[track] = itemIncurredIncrease[track];
+        if (track->itemIncurredIncrease > track->plannedIncrease) {
+          track->plannedIncrease = track->itemIncurredIncrease;
         }
       }
     }
 
     // 3. Update the tracks affected sizes
-    for (const auto& [track, increase] : plannedIncrease) {
+    for (auto* track : plannedTracks) {
+      const float increase = track->plannedIncrease;
       if (affectedSizeType == AffectedSize::BaseSize) {
         track->baseSize += increase;
       } else {
@@ -758,18 +762,21 @@ struct TrackSizing {
                                                      : &GridItem::rowEnd;
 
     // Step 1: Maintain planned increase for each affected track
-    std::unordered_map<GridTrack*, float> plannedIncrease;
+    std::vector<GridTrack*> plannedTracks;
     for (const auto& itemSizeContribution : gridItemSizeContributions) {
       for (auto& track : itemSizeContribution.affectedTracks) {
-        plannedIncrease[track] = 0.0f;
+        if (std::find(plannedTracks.begin(), plannedTracks.end(), track) ==
+            plannedTracks.end()) {
+          plannedTracks.push_back(track);
+          track->plannedIncrease = 0.0f;
+        }
       }
     }
 
     // Step 2: For each item
     for (const auto& itemSizeContribution : gridItemSizeContributions) {
-      std::unordered_map<GridTrack*, float> itemIncurredIncrease;
       for (auto& track : itemSizeContribution.affectedTracks) {
-        itemIncurredIncrease[track] = 0.0f;
+        track->itemIncurredIncrease = 0.0f;
       }
 
       // 2.1 Find space to distribute
@@ -797,28 +804,28 @@ struct TrackSizing {
         for (auto& track : itemSizeContribution.affectedTracks) {
           auto flexFactor = track->maxSizingFunction.value().unwrap();
           auto increase = spaceToDistribute * flexFactor / sumOfFlexFactors;
-          itemIncurredIncrease[track] += increase;
+          track->itemIncurredIncrease += increase;
         }
       } else {
         // All flex factors are zero, distribute equally
         auto equalShare = spaceToDistribute /
             static_cast<float>(itemSizeContribution.affectedTracks.size());
         for (auto& track : itemSizeContribution.affectedTracks) {
-          itemIncurredIncrease[track] += equalShare;
+          track->itemIncurredIncrease += equalShare;
         }
       }
 
       for (auto& track : itemSizeContribution.affectedTracks) {
-        if (itemIncurredIncrease[track] > plannedIncrease[track]) {
-          plannedIncrease[track] = itemIncurredIncrease[track];
+        if (track->itemIncurredIncrease > track->plannedIncrease) {
+          track->plannedIncrease = track->itemIncurredIncrease;
         }
       }
     }
 
     // Step 3: Update the tracks' affected sizes by adding in the planned
     // increase
-    for (const auto& [track, increase] : plannedIncrease) {
-      track->baseSize += increase;
+    for (auto* track : plannedTracks) {
+      track->baseSize += track->plannedIncrease;
     }
   };
 
@@ -913,19 +920,20 @@ struct TrackSizing {
           track.baseSize = track.growthLimit;
         }
       } else {
-        std::unordered_set<GridTrack*> frozenTracks;
-        frozenTracks.reserve(tracks.size());
+        for (auto& track : tracks) {
+          track.frozen = false;
+        }
+        size_t frozenCount = 0;
         auto extraSpace = freeSpace;
 
-        while (frozenTracks.size() < tracks.size() && extraSpace > 0.0f &&
+        while (frozenCount < tracks.size() && extraSpace > 0.0f &&
                !inexactEquals(extraSpace, 0.0f)) {
-          auto unfrozenTrackCount = tracks.size() - frozenTracks.size();
+          auto unfrozenTrackCount = tracks.size() - frozenCount;
           auto distributionPerTrack =
               extraSpace / static_cast<float>(unfrozenTrackCount);
 
           for (auto& track : tracks) {
-            GridTrack* trackPtr = &track;
-            if (frozenTracks.count(trackPtr)) {
+            if (track.frozen) {
               continue;
             }
 
@@ -935,7 +943,8 @@ struct TrackSizing {
                   std::max(0.0f, track.growthLimit - track.baseSize);
               track.baseSize += increase;
               extraSpace -= increase;
-              frozenTracks.insert(trackPtr);
+              track.frozen = true;
+              frozenCount++;
             } else {
               track.baseSize += distributionPerTrack;
               extraSpace -= distributionPerTrack;
@@ -975,7 +984,7 @@ struct TrackSizing {
           0,
           gridTracks.size(),
           containerSize,
-          std::unordered_set<GridTrack*>());
+          std::vector<GridTrack*>());
     }
     // Otherwise, if the free space is an indefinite length:
     // The used flex fraction is the maximum of:
@@ -1018,7 +1027,7 @@ struct TrackSizing {
                 item.*startIndexKey,
                 item.*endIndexKey,
                 itemMaxContentContribution,
-                std::unordered_set<GridTrack*>()));
+                std::vector<GridTrack*>()));
       }
     }
 
@@ -1067,7 +1076,7 @@ struct TrackSizing {
             0,
             gridTracks.size(),
             minContainerSize,
-            std::unordered_set<GridTrack*>());
+            std::vector<GridTrack*>());
       }
     }
 
@@ -1090,7 +1099,7 @@ struct TrackSizing {
             0,
             gridTracks.size(),
             maxContainerSize,
-            std::unordered_set<GridTrack*>());
+            std::vector<GridTrack*>());
       }
     }
 
@@ -1116,7 +1125,7 @@ struct TrackSizing {
       size_t startIndex,
       size_t endIndex,
       float spaceToFill,
-      const std::unordered_set<GridTrack*>& nonFlexibleTracks) {
+      const std::vector<GridTrack*>& nonFlexibleTracks) {
     auto containerSize = dimension == YGDimensionWidth ? containerInnerWidth
                                                        : containerInnerHeight;
     auto gap = node->style().computeGapForDimension(dimension, containerSize);
@@ -1135,7 +1144,9 @@ struct TrackSizing {
       }
 
       if (!isFlexibleSizingFunction(track.maxSizingFunction) ||
-          nonFlexibleTracks.count(&track)) {
+          std::find(
+              nonFlexibleTracks.begin(), nonFlexibleTracks.end(), &track) !=
+              nonFlexibleTracks.end()) {
         leftoverSpace -= track.baseSize;
       }
       // Let flex factor sum be the sum of the flex factors of the flexible
@@ -1159,13 +1170,13 @@ struct TrackSizing {
     // If the product of the hypothetical fr size and a flexible track's flex
     // factor is less than the track's base size, restart this algorithm
     // treating all such tracks as inflexible.
-    std::unordered_set<GridTrack*> inflexibleTracks;
+    std::vector<GridTrack*> inflexibleTracks;
     for (auto& track : flexibleTracks) {
       if (track->maxSizingFunction.isStretch() &&
           track->maxSizingFunction.value().isDefined()) {
         float flexFactor = track->maxSizingFunction.value().unwrap();
         if (hypotheticalFrSize * flexFactor < track->baseSize) {
-          inflexibleTracks.insert(track);
+          inflexibleTracks.push_back(track);
         }
       }
     }
@@ -1173,7 +1184,9 @@ struct TrackSizing {
     // restart this algorithm treating all such tracks as inflexible.
     if (!inflexibleTracks.empty()) {
       inflexibleTracks.insert(
-          nonFlexibleTracks.begin(), nonFlexibleTracks.end());
+          inflexibleTracks.end(),
+          nonFlexibleTracks.begin(),
+          nonFlexibleTracks.end());
       return findFrSize(
           dimension, startIndex, endIndex, spaceToFill, inflexibleTracks);
     }

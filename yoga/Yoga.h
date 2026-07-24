@@ -410,6 +410,19 @@ YOGA_EXPORT float YGNodeLayoutGetHeight(YGNodeRef node);
 YOGA_EXPORT YGDirection YGNodeLayoutGetDirection(YGNodeRef node);
 YOGA_EXPORT bool YGNodeLayoutGetHadOverflow(YGNodeRef node);
 
+// Resolved grid line positions in the node's local content space (same space as
+// child layout positions), available after a layout pass on a grid node. The
+// count is (track count + 1); consecutive offsets bound a cell/track. Non-grid
+// nodes report 0 lines.
+YOGA_EXPORT uint32_t YGNodeLayoutGetGridColumnLineCount(YGNodeRef node);
+YOGA_EXPORT float YGNodeLayoutGetGridColumnLineOffset(
+    YGNodeRef node,
+    uint32_t index);
+YOGA_EXPORT uint32_t YGNodeLayoutGetGridRowLineCount(YGNodeRef node);
+YOGA_EXPORT float YGNodeLayoutGetGridRowLineOffset(
+    YGNodeRef node,
+    uint32_t index);
+
 // Get the computed values for these nodes after performing layout. If they were
 // set using point values then the returned value will be the same as
 // YGNodeStyleGetXXX. However if they were set using a percentage value then the

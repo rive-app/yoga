@@ -312,6 +312,25 @@ void calculateGridLayoutInternal(
     rowGridLineOffsets.push_back(offset);
   }
 
+  // Persist the resolved grid line positions in local content space (matching
+  // child layout positions) so tooling can map a point back to a cell. The raw
+  // offsets are relative to the grid content box; shift by the leading
+  // padding/border and the grid's alignment start offset to land in the same
+  // space as each item's layout position (see finalLeft/finalTop below).
+  auto& gridLayout = node->getLayout();
+  gridLayout.gridColumnLineOffsets.clear();
+  gridLayout.gridColumnLineOffsets.reserve(columnGridLineOffsets.size());
+  for (float o : columnGridLineOffsets) {
+    gridLayout.gridColumnLineOffsets.push_back(
+        leadingPaddingAndBorderInline + gridInlineStartOffset + o);
+  }
+  gridLayout.gridRowLineOffsets.clear();
+  gridLayout.gridRowLineOffsets.reserve(rowGridLineOffsets.size());
+  for (float o : rowGridLineOffsets) {
+    gridLayout.gridRowLineOffsets.push_back(
+        leadingPaddingAndBorderBlock + gridBlockStartOffset + o);
+  }
+
   for (auto& item : gridItems) {
     // grid line offsets include the gap after each track (except the last).
     // so we subtract the trailing gap for items that do not end at the last

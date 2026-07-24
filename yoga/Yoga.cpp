@@ -1315,6 +1315,28 @@ YG_NODE_LAYOUT_RESOLVED_PROPERTY_IMPL(float, Margin, margin)
 YG_NODE_LAYOUT_RESOLVED_PROPERTY_IMPL(float, Border, border)
 YG_NODE_LAYOUT_RESOLVED_PROPERTY_IMPL(float, Padding, padding)
 
+YOGA_EXPORT uint32_t YGNodeLayoutGetGridColumnLineCount(const YGNodeRef node) {
+  return static_cast<uint32_t>(node->getLayout().gridColumnLineOffsets.size());
+}
+
+YOGA_EXPORT float YGNodeLayoutGetGridColumnLineOffset(
+    const YGNodeRef node,
+    const uint32_t index) {
+  const auto& offsets = node->getLayout().gridColumnLineOffsets;
+  return index < offsets.size() ? offsets[index] : YGUndefined;
+}
+
+YOGA_EXPORT uint32_t YGNodeLayoutGetGridRowLineCount(const YGNodeRef node) {
+  return static_cast<uint32_t>(node->getLayout().gridRowLineOffsets.size());
+}
+
+YOGA_EXPORT float YGNodeLayoutGetGridRowLineOffset(
+    const YGNodeRef node,
+    const uint32_t index) {
+  const auto& offsets = node->getLayout().gridRowLineOffsets;
+  return index < offsets.size() ? offsets[index] : YGUndefined;
+}
+
 std::atomic<uint32_t> gCurrentGenerationCount(0);
 
 bool YGLayoutNodeInternal(

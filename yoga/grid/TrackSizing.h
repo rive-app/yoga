@@ -465,6 +465,8 @@ struct TrackSizing {
       return;
     }
     auto& tracks = dimension == YGDimensionWidth ? columnTracks : rowTracks;
+    auto containerSize = dimension == YGDimensionWidth ? containerInnerWidth
+                                                       : containerInnerHeight;
     auto sizingMode =
         dimension == YGDimensionWidth ? widthSizingMode : heightSizingMode;
     auto startIndexkey = dimension == YGDimensionWidth ? &GridItem::columnStart
@@ -485,7 +487,12 @@ struct TrackSizing {
 
       for (size_t i = start; i < end && i < tracks.size(); i++) {
         auto& track = tracks[i];
-        if (isFlexibleSizingFunction(track.maxSizingFunction)) {
+        // rive: 11.5.4 repeats the previous step, which only ever grows tracks
+        // whose *min* sizing function is intrinsic. Distributing into every
+        // flexible track regardless made an authored minimum — minmax(0, 1fr)
+        // — do nothing at all.
+        if (isFlexibleSizingFunction(track.maxSizingFunction) &&
+            isIntrinsicSizingFunction(track.minSizingFunction, containerSize)) {
           flexibleTracks.push_back(&track);
         }
       }
@@ -1241,6 +1248,50 @@ struct TrackSizing {
     return item.node->getLayout().measuredDimensions[dimension];
   }
 
+  // rive: min-content, by laying the item out in zero space on [dimension] and
+  // seeing how wide it still insists on being. Yoga has no min-content
+  // constraint, so this is the nearest equivalent: everything that can shrink
+  // or wrap does, and what is left is the item's irreducible size.
+  //
+  // Two details this depends on:
+  //  - performLayout must be true. The !performLayout fast path
+  //    (YGNodeFixedSizeSetMeasuredDimensions) short-circuits any AtMost(<= 0)
+  //    measurement straight to zero, which would floor every track at nothing.
+  //  - an item with a definite length in this axis is measured normally. Its
+  //    min-content contribution is that definite size, not its content's, and
+  //    the caller's constraints already say Exactly for it.
+  float measureItemMinContent(
+      const GridItem& item,
+      YGDimension dimension,
+      const ItemConstraint& constraints) {
+    const bool isWidth = dimension == YGDimensionWidth;
+    const auto containingBlockSize = isWidth
+        ? constraints.containingBlockWidth
+        : constraints.containingBlockHeight;
+    if (item.node->hasDefiniteLength(dimension, containingBlockSize)) {
+      return measureItem(item, dimension, constraints);
+    }
+
+    YGLayoutNodeInternal(
+        item.node,
+        isWidth ? 0.0f : constraints.width,
+        isWidth ? constraints.height : 0.0f,
+        node->getLayout().direction(),
+        isWidth ? YGMeasureModeAtMost : constraints.widthSizingMode,
+        isWidth ? constraints.heightSizingMode : YGMeasureModeAtMost,
+        constraints.containingBlockWidth,
+        constraints.containingBlockHeight,
+        true,
+        LayoutPassReason::kMeasureChild,
+        config,
+        layoutMarkerData,
+        layoutContext,
+        depth + 1,
+        generationCount);
+
+    return item.node->getLayout().measuredDimensions[dimension];
+  }
+
   // There are 4 size contribution types used for intrinsic track sizing
   // 1. minContentContribution - item's min-content size + margins
   // 2. maxContentContribution - item's max-content size + margins
@@ -1248,8 +1299,6 @@ struct TrackSizing {
   // 4. limitedMinContentContribution - min-content clamped by fixed track
   // limits
 
-  // TODO: Yoga does not support min-content constraint yet so we use the
-  // max-content size contributions here
   float minContentContribution(
       const GridItem& item,
       YGDimension dimension,
@@ -1260,7 +1309,7 @@ struct TrackSizing {
         itemConstraints.containingBlockWidth);
 
     float contribution =
-        measureItem(item, dimension, itemConstraints) + marginForAxis;
+        measureItemMinContent(item, dimension, itemConstraints) + marginForAxis;
 
     return contribution;
   }
@@ -1378,7 +1427,10 @@ struct TrackSizing {
       const ItemConstraint& itemConstraints,
       const std::vector<GridTrack>& tracks,
       float containerSize) {
-    float result = measureItem(item, dimension, itemConstraints);
+    // rive: min-content, not max-content. This is the floor under a 1fr track,
+    // so measuring the item unsqueezed grew the track past the container
+    // whenever the content could have reflowed.
+    float result = measureItemMinContent(item, dimension, itemConstraints);
     // Clamp by fixed track limit if all spanned tracks have fixed max sizing
     // function
     auto fixedLimit =

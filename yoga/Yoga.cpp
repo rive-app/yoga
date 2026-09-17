@@ -4515,6 +4515,10 @@ YOGA_EXPORT float YGConfigGetPointScaleFactor(const YGConfigRef config) {
   return config->getPointScaleFactor();
 }
 
+YOGA_EXPORT bool YGConfigIsMeasuringMinContent(const YGConfigRef config) {
+  return config->isMeasuringMinContent();
+}
+
 static void YGRoundToPixelGrid(
     const YGNodeRef node,
     const double pointScaleFactor,

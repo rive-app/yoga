@@ -1272,6 +1272,10 @@ struct TrackSizing {
       return measureItem(item, dimension, constraints);
     }
 
+    // A measure func that clamps to the space it is offered would answer
+    // this AtMost(0) with zero and floor the track at nothing. Raise the flag
+    // so it can recognise the probe and report its content instead.
+    config->beginMinContentProbe();
     YGLayoutNodeInternal(
         item.node,
         isWidth ? 0.0f : constraints.width,
@@ -1288,8 +1292,14 @@ struct TrackSizing {
         layoutContext,
         depth + 1,
         generationCount);
+    config->endMinContentProbe();
 
-    return item.node->getLayout().measuredDimensions[dimension];
+    const float contribution =
+        item.node->getLayout().measuredDimensions[dimension];
+    // The probe was cached under AtMost(0). A genuinely zero-sized box later
+    // asks the same question and must not get the probe's answer.
+    item.node->getLayout().cachedLayout = YGCachedMeasurement();
+    return contribution;
   }
 
   // There are 4 size contribution types used for intrinsic track sizing

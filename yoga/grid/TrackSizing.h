@@ -68,6 +68,9 @@ struct TrackSizing {
   YGConfigRef config;   // rive: threaded for YGLayoutNodeInternal
   void* layoutContext;  // rive: threaded for YGLayoutNodeInternal
   CrossDimensionEstimator crossDimensionEstimator;
+  // rive: grid line of the first track, to index nodeless contributions.
+  int32_t firstColumnLine = 0;
+  int32_t firstRowLine = 0;
 
   // below flags are used for optimization purposes
   bool hasPercentageColumnTracks = false;
@@ -327,6 +330,27 @@ struct TrackSizing {
       }
     }
 
+    // rive: nodeless single-cell items size their tracks as the items above.
+    for (size_t i = 0; i < tracks.size(); i++) {
+      auto& track = tracks[i];
+      float contribution = virtualContribution(dimension, i);
+      if (contribution <= 0.0f ||
+          isFlexibleSizingFunction(track.maxSizingFunction)) {
+        continue;
+      }
+      if (isAutoSizingFunction(track.minSizingFunction, containerSize)) {
+        track.baseSize = std::max(track.baseSize, contribution);
+      }
+      if (isAutoSizingFunction(track.maxSizingFunction, containerSize)) {
+        track.growthLimit = track.growthLimit == INFINITY
+            ? contribution
+            : std::max(track.growthLimit, contribution);
+      }
+      if (track.growthLimit < track.baseSize) {
+        track.growthLimit = track.baseSize;
+      }
+    }
+
     // 3. Increase sizes to accommodate spanning items crossing content-sized
     // tracks: https://www.w3.org/TR/css-grid-1/#algo-spanning-items
     if (spanningItemIndices.empty()) {
@@ -510,6 +534,17 @@ struct TrackSizing {
 
     if (!itemsSpanningFlexible.empty()) {
       distributeSpaceToFlexibleTracksForItems(dimension, itemsSpanningFlexible);
+    }
+
+    // rive: a nodeless single-cell item grows its flexible track to fit, as
+    // distributing over its one track would.
+    for (size_t i = 0; i < tracks.size(); i++) {
+      auto& track = tracks[i];
+      if (isFlexibleSizingFunction(track.maxSizingFunction) &&
+          isIntrinsicSizingFunction(track.minSizingFunction, containerSize)) {
+        track.baseSize =
+            std::max(track.baseSize, virtualContribution(dimension, i));
+      }
     }
   };
 
@@ -969,6 +1004,18 @@ struct TrackSizing {
                 itemMaxContentContribution,
                 std::vector<GridTrack*>()));
       }
+
+      // rive: nodeless single-cell items in flexible tracks.
+      for (size_t i = 0; i < gridTracks.size(); i++) {
+        float contribution = virtualContribution(dimension, i);
+        if (contribution > 0.0f &&
+            isFlexibleSizingFunction(gridTracks[i].maxSizingFunction)) {
+          flexFraction = std::max(
+              flexFraction,
+              findFrSize(
+                  dimension, i, i + 1, contribution, std::vector<GridTrack*>()));
+        }
+      }
     }
 
     // If using this flex fraction would cause the grid to be smaller than the
@@ -1212,6 +1259,13 @@ struct TrackSizing {
   };
 
   // https://www.w3.org/TR/css-grid-1/#free-space
+  float virtualContribution(YGDimension dimension, size_t track) const {
+    return node->gridVirtualContribution(
+        dimension,
+        static_cast<int32_t>(track) +
+            (dimension == YGDimensionWidth ? firstColumnLine : firstRowLine));
+  }
+
   float calculateFreeSpace(YGDimension dimension) {
     float freeSpace = YGUndefined;
     auto containerSize = dimension == YGDimensionWidth ? containerInnerWidth

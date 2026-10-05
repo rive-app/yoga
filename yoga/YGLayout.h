@@ -47,6 +47,10 @@ public:
   // tooling can hit-test a point to a grid cell.
   std::vector<float> gridColumnLineOffsets = {};
   std::vector<float> gridRowLineOffsets = {};
+  // rive: the gaps between those lines' tracks, as content distribution
+  // spaced them.
+  float gridColumnGap = 0.0f;
+  float gridRowGap = 0.0f;
 
   YGDirection direction() const {
     return facebook::yoga::detail::getEnumData<YGDirection>(

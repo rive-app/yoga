@@ -1330,6 +1330,20 @@ YOGA_EXPORT uint32_t YGNodeLayoutGetGridRowLineCount(const YGNodeRef node) {
   return static_cast<uint32_t>(node->getLayout().gridRowLineOffsets.size());
 }
 
+YOGA_EXPORT bool YGNodeSetGridVirtualContributions(
+    const YGNodeRef node,
+    const float* rowSizes,
+    const size_t rowCount,
+    const float* columnSizes,
+    const size_t columnCount) {
+  if (!node->setGridVirtualContributions(
+          rowSizes, rowCount, columnSizes, columnCount)) {
+    return false;
+  }
+  node->markDirtyAndPropagate();
+  return true;
+}
+
 YOGA_EXPORT float YGNodeLayoutGetGridRowLineOffset(
     const YGNodeRef node,
     const uint32_t index) {
@@ -3195,7 +3209,8 @@ static void YGNodelayoutImpl(
   }
 
   const uint32_t childCount = YGNodeGetChildCount(node);
-  if (childCount == 0) {
+  // rive: a grid with nodeless items still has tracks to size.
+  if (childCount == 0 && !node->hasGridVirtualContributions()) {
     YGNodeEmptyContainerSetMeasuredDimensions(
         node,
         availableWidth - marginAxisRow,

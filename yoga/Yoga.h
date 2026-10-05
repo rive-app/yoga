@@ -418,6 +418,18 @@ YOGA_EXPORT uint32_t YGNodeLayoutGetGridColumnLineCount(YGNodeRef node);
 YOGA_EXPORT float YGNodeLayoutGetGridColumnLineOffset(
     YGNodeRef node,
     uint32_t index);
+// rive: content sizes of single-cell grid items that have no node, per row and
+// column from grid line 1. They stand for every item, so while any are set the
+// node's children don't size tracks on either axis. Rows or columns past the
+// last item become implicit tracks; both counts zero clears. Returns whether
+// they changed, which dirties the node.
+YOGA_EXPORT bool YGNodeSetGridVirtualContributions(
+    YGNodeRef node,
+    const float* rowSizes,
+    size_t rowCount,
+    const float* columnSizes,
+    size_t columnCount);
+
 YOGA_EXPORT uint32_t YGNodeLayoutGetGridRowLineCount(YGNodeRef node);
 YOGA_EXPORT float YGNodeLayoutGetGridRowLineOffset(
     YGNodeRef node,

@@ -583,6 +583,14 @@ struct ResolvedAutoPlacement {
       placement.node->processDimensions();
     }
 
+    // rive: nodeless items extend the implicit grid like placed ones.
+    maxColumnEnd = std::max(
+        maxColumnEnd,
+        static_cast<int32_t>(node->gridVirtualTrackCount(YGDimensionWidth)));
+    maxRowEnd = std::max(
+        maxRowEnd,
+        static_cast<int32_t>(node->gridVirtualTrackCount(YGDimensionHeight)));
+
     return ResolvedAutoPlacement{
         .gridItems = std::move(resolvedAreas),
         .minColumnStart = minColumnStart,

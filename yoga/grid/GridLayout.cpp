@@ -444,6 +444,59 @@ void calculateGridLayoutInternal(
         depth,
         generationCount);
 
+    // rive: a hugging anchor axis had no size to derive from before layout;
+    // take it from the measured size now and lay the item out again.
+    if (itemStyle.aspectRatio().isDefined() &&
+        itemStyle.aspectRatio().unwrap() > 0.0f &&
+        itemStyle.aspectRatioAxis() != YGAspectRatioAxisAuto) {
+      const bool anchorsRow =
+          itemStyle.aspectRatioAxis() == YGAspectRatioAxisWidth;
+      const auto anchorMode = anchorsRow ? itemConstraints.widthSizingMode
+                                         : itemConstraints.heightSizingMode;
+      if (anchorMode != YGMeasureModeExactly) {
+        const float ratio = itemStyle.aspectRatio().unwrap();
+        const float measuredWidth =
+            item.node->getLayout().measuredDimensions[YGDimensionWidth];
+        const float measuredHeight =
+            item.node->getLayout().measuredDimensions[YGDimensionHeight];
+        float width = anchorsRow ? measuredWidth : measuredHeight * ratio;
+        float height = anchorsRow ? measuredWidth / ratio : measuredHeight;
+        if (anchorsRow) {
+          height = boundAxis(
+              item.node,
+              YGFlexDirectionColumn,
+              direction,
+              height,
+              containingBlockHeight,
+              containingBlockWidth);
+        } else {
+          width = boundAxis(
+              item.node,
+              YGFlexDirectionRow,
+              direction,
+              width,
+              containingBlockWidth,
+              containingBlockWidth);
+        }
+        YGLayoutNodeInternal(
+            item.node,
+            width + marginInlineStart + marginInlineEnd,
+            height + marginBlockStart + marginBlockEnd,
+            direction,
+            YGMeasureModeExactly,
+            YGMeasureModeExactly,
+            containingBlockWidth,
+            containingBlockHeight,
+            true,
+            LayoutPassReason::kGridLayout,
+            config,
+            layoutMarkerData,
+            layoutContext,
+            depth,
+            generationCount);
+      }
+    }
+
     auto justifySelf = resolveChildJustification(node, item.node);
     auto alignSelf = resolveChildAlignment(node, item.node);
 

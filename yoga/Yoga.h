@@ -302,6 +302,14 @@ YOGA_EXPORT YGValue YGNodeStyleGetMaxHeight(YGNodeConstRef node);
 // - Aspect ratio takes min/max dimensions into account
 YOGA_EXPORT void YGNodeStyleSetAspectRatio(YGNodeRef node, float aspectRatio);
 YOGA_EXPORT float YGNodeStyleGetAspectRatio(YGNodeConstRef node);
+// rive: which axis the aspect ratio is computed from. Auto is Yoga's own rule
+// (the owner's main axis); width or height anchors that axis whatever the
+// owner's direction, and the other axis is always derived from it.
+YOGA_EXPORT void YGNodeStyleSetAspectRatioAxis(
+    YGNodeRef node,
+    YGAspectRatioAxis axis);
+YOGA_EXPORT YGAspectRatioAxis
+YGNodeStyleGetAspectRatioAxis(YGNodeConstRef node);
 
 // rive: grid style backport (facebook/yoga PR #1893)
 

@@ -3430,6 +3430,13 @@ static void YGNodelayoutImpl(
           heightMeasureMode,
           ownerWidth,
           ownerHeight)) {
+    // rive: short of two exact sizes, that sized the node to the space it was
+    // offered rather than its content, so no measurement it's part of stands
+    // in for one under other limits (YGContainerAxisCanUseCachedMeasurement).
+    if (widthMeasureMode != YGMeasureModeExactly ||
+        heightMeasureMode != YGMeasureModeExactly) {
+      layoutMarkerData.limitDependentMeasures++;
+    }
     return;
   }
 
@@ -4438,6 +4445,137 @@ YOGA_EXPORT bool YGNodeCanUseCachedMeasurement(
   return widthIsCompatible && heightIsCompatible;
 }
 
+// rive: whether a container's measured size depends only on its content
+// (YGContentFlagMeasuresByContent), so that a measurement it made under one
+// set of constraints stands in for another the measured size still fits
+// (YGContainerAxisCanUseCachedMeasurement). That holds for a flex container:
+// unless the legacy stretch errata is on, an at-most measure sizes it to its
+// content and doesn't grow flexible children into the room left. It doesn't
+// hold once the container or anything below it resolves against the space
+// it's offered: a percentage, an aspect ratio, a scrolling overflow, or a
+// grid's track sizing.
+template <size_t Size>
+static bool YGValuesHavePercent(
+    const facebook::yoga::detail::Values<Size>& values) {
+  for (size_t i = 0; i < Size; i++) {
+    if (YGValue(values[i]).unit == YGUnitPercent) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool YGStyleSizesByPercent(const YGStyle& style) {
+  return YGValue(style.flexBasis()).unit == YGUnitPercent ||
+      YGValuesHavePercent(style.dimensions()) ||
+      YGValuesHavePercent(style.minDimensions()) ||
+      YGValuesHavePercent(style.maxDimensions()) ||
+      YGValuesHavePercent(style.margin()) ||
+      YGValuesHavePercent(style.padding()) ||
+      YGValuesHavePercent(style.border());
+}
+
+// rive: what a node's styles say about measuring it (YGLayout::contentFlags):
+// whether its measured size depends only on its content, as above, and
+// whether it stretches a child across its cross axis.
+enum : uint8_t {
+  YGContentFlagsKnown = 1 << 0,
+  YGContentFlagMeasuresByContent = 1 << 1,
+  YGContentFlagStretchesChildren = 1 << 2,
+};
+
+// rive: worked out once since the node was last dirtied. A node's flags are
+// only trusted while it's clean or once this solve has visited it, so a style
+// change waiting on a dirty node is never missed.
+static uint8_t YGNodeContentFlags(
+    const YGNodeRef node,
+    const uint32_t generationCount) {
+  YGLayout& layout = node->getLayout();
+  if ((layout.contentFlags & YGContentFlagsKnown) != 0 &&
+      (!node->isDirty() || layout.generationCount == generationCount)) {
+    return layout.contentFlags;
+  }
+  const YGStyle& style = node->getStyle();
+  bool byContent = style.display() != YGDisplayGrid &&
+      style.overflow() != YGOverflowScroll &&
+      style.aspectRatio().isUndefined() && !YGValuesHavePercent(style.gap()) &&
+      !YGStyleSizesByPercent(style) &&
+      !node->hasErrata(YGErrataStretchFlexBasis);
+  bool stretches = false;
+  const YGDimension crossDimension =
+      YGFlexDirectionIsRow(style.flexDirection()) ? YGDimensionHeight
+                                                  : YGDimensionWidth;
+  for (const YGNodeRef child : node->getChildren()) {
+    if (!byContent) {
+      break;
+    }
+    const YGStyle& childStyle = child->getStyle();
+    if (childStyle.display() == YGDisplayNone ||
+        childStyle.positionType() == YGPositionTypeAbsolute) {
+      continue;
+    }
+    byContent = child->hasMeasureFunc()
+        ? childStyle.aspectRatio().isUndefined() &&
+            !YGStyleSizesByPercent(childStyle)
+        : (YGNodeContentFlags(child, generationCount) &
+           YGContentFlagMeasuresByContent) != 0;
+    if (!stretches && YGNodeAlignItem(node, child) == YGAlignStretch) {
+      const YGValue crossSize =
+          YGValue(childStyle.dimensions()[crossDimension]);
+      stretches =
+          !(crossSize.unit == YGUnitPoint && crossSize.value >= 0.0f);
+    }
+  }
+  layout.contentFlags = YGContentFlagsKnown |
+      (byContent ? YGContentFlagMeasuresByContent : 0) |
+      (stretches ? YGContentFlagStretchesChildren : 0);
+  return layout.contentFlags;
+}
+
+// rive: whether a container's measurement along one axis, made under
+// [lastMode] [lastSize], stands in for one under [mode] [size]: the same
+// constraint, an at-most limit no looser than the last one (or the last one
+// had none) that the measured size fits inside, or an exact size equal to the
+// measured size.
+//
+// Yoga measures a container offered at most nothing past its margins as the
+// space it's offered rather than its content
+// (YGNodeFixedSizeSetMeasuredDimensions). A limit that only just holds the
+// content, or an exact size equal to it, offers that to any container inside
+// that measures as nothing. So unless [tight] says the measurement had none,
+// the measured size has to fit strictly inside an at-most limit, and an exact
+// size never stands in. Nor does an exact size across a container that
+// [stretches] a child: an at-most measurement didn't stretch it. Unlike
+// YGNodeCanUseCachedMeasurement, the limits aren't rounded to the pixel grid,
+// where a fraction narrower can wrap a line.
+static bool YGContainerAxisCanUseCachedMeasurement(
+    const YGMeasureMode mode,
+    const float size,
+    const YGMeasureMode lastMode,
+    const float lastSize,
+    const float lastComputedSize,
+    const float margin,
+    const bool tight,
+    const bool stretches) {
+  if (mode == lastMode && YGFloatsEqual(size, lastSize)) {
+    return true;
+  }
+  if (YGFloatIsUndefined(size) || YGFloatIsUndefined(lastComputedSize) ||
+      lastComputedSize < 0) {
+    return false;
+  }
+  const bool fills = YGFloatsEqual(lastComputedSize, size - margin);
+  if (mode == YGMeasureModeExactly) {
+    return tight && !stretches && fills;
+  }
+  if (mode != YGMeasureModeAtMost) {
+    return false;
+  }
+  const bool noLooser = lastMode == YGMeasureModeUndefined ||
+      (lastMode == YGMeasureModeAtMost && lastSize > size);
+  return noLooser && (fills ? tight : lastComputedSize < size - margin);
+}
+
 //
 // This is a wrapper around the YGNodelayoutImpl function. It determines whether
 // the layout request is redundant and can be skipped.
@@ -4473,6 +4611,9 @@ bool YGLayoutNodeInternal(
   if (needToVisitNode) {
     // Invalidate the cached results.
     layout->nextCachedMeasurementsIndex = 0;
+    layout->limitDependentMeasurements = 0;
+    layout->emptyContainerMeasurements = 0;
+    layout->contentFlags = 0;
     layout->cachedLayout.availableWidth = -1;
     layout->cachedLayout.availableHeight = -1;
     layout->cachedLayout.widthMeasureMode = YGMeasureModeUndefined;
@@ -4482,6 +4623,8 @@ bool YGLayoutNodeInternal(
   }
 
   YGCachedMeasurement* cachedResults = nullptr;
+  // rive: which of cachedMeasurements cachedResults is, if one.
+  int cachedMeasurementIndex = -1;
 
   // Determine whether the results are already cached. We maintain a separate
   // cache for layouts and measurements. A layout operation modifies the
@@ -4531,6 +4674,7 @@ bool YGLayoutNodeInternal(
                 marginAxisColumn,
                 config)) {
           cachedResults = &layout->cachedMeasurements[i];
+          cachedMeasurementIndex = i;
           break;
         }
       }
@@ -4552,12 +4696,78 @@ bool YGLayoutNodeInternal(
           layout->cachedMeasurements[i].heightMeasureMode ==
               heightMeasureMode) {
         cachedResults = &layout->cachedMeasurements[i];
+        cachedMeasurementIndex = i;
         break;
+      }
+    }
+    // rive: a container that sizes to its content reuses a measurement the
+    // new constraints still fit, much as a node with a measure function does
+    // above. A hug container is measured under many different limits while
+    // its parents resolve their own sizes, and each miss measures its whole
+    // subtree again. Not a measurement that sized something to the space it
+    // was offered, though (limitDependentMeasurements). Two exact sizes are
+    // quicker measured than looked up: Yoga sizes a container offered them
+    // without measuring its content.
+    const uint8_t contentFlags = cachedResults == nullptr &&
+            layout->nextCachedMeasurementsIndex > 0 &&
+            !(widthMeasureMode == YGMeasureModeExactly &&
+              heightMeasureMode == YGMeasureModeExactly)
+        ? YGNodeContentFlags(node, generationCount)
+        : 0;
+    if ((contentFlags & YGContentFlagMeasuresByContent) != 0) {
+      const float marginAxisRow =
+          node->getMarginForAxis(YGFlexDirectionRow, ownerWidth).unwrap();
+      const float marginAxisColumn =
+          node->getMarginForAxis(YGFlexDirectionColumn, ownerWidth).unwrap();
+      const bool stretches =
+          (contentFlags & YGContentFlagStretchesChildren) != 0;
+      const bool rowMain =
+          YGFlexDirectionIsRow(node->getStyle().flexDirection());
+      for (uint32_t i = 0; i < layout->nextCachedMeasurementsIndex; i++) {
+        const uint8_t bit = static_cast<uint8_t>(1u << i);
+        if ((layout->limitDependentMeasurements & bit) != 0) {
+          continue;
+        }
+        const bool tight = (layout->emptyContainerMeasurements & bit) == 0;
+        const YGCachedMeasurement& cached = layout->cachedMeasurements[i];
+        if (YGContainerAxisCanUseCachedMeasurement(
+                widthMeasureMode,
+                availableWidth,
+                cached.widthMeasureMode,
+                cached.availableWidth,
+                cached.computedWidth,
+                marginAxisRow,
+                tight,
+                stretches && !rowMain) &&
+            YGContainerAxisCanUseCachedMeasurement(
+                heightMeasureMode,
+                availableHeight,
+                cached.heightMeasureMode,
+                cached.availableHeight,
+                cached.computedHeight,
+                marginAxisColumn,
+                tight,
+                stretches && rowMain)) {
+          cachedResults = &layout->cachedMeasurements[i];
+          cachedMeasurementIndex = i;
+          break;
+        }
       }
     }
   }
 
   if (!needToVisitNode && cachedResults != nullptr) {
+    // rive: a reused measurement passes its marks on to whatever is
+    // measuring this node.
+    if (cachedMeasurementIndex >= 0) {
+      const uint8_t bit = static_cast<uint8_t>(1u << cachedMeasurementIndex);
+      if ((layout->limitDependentMeasurements & bit) != 0) {
+        layoutMarkerData.limitDependentMeasures++;
+      }
+      if ((layout->emptyContainerMeasurements & bit) != 0) {
+        layoutMarkerData.emptyContainerMeasures++;
+      }
+    }
     layout->measuredDimensions[YGDimensionWidth] = cachedResults->computedWidth;
     layout->measuredDimensions[YGDimensionHeight] =
         cachedResults->computedHeight;
@@ -4610,6 +4820,8 @@ bool YGLayoutNodeInternal(
           LayoutPassReasonToString(reason));
     }
 
+    const int limitDependentMeasures = layoutMarkerData.limitDependentMeasures;
+    const int emptyContainerMeasures = layoutMarkerData.emptyContainerMeasures;
     YGNodelayoutImpl(
         node,
         availableWidth,
@@ -4672,6 +4884,27 @@ bool YGLayoutNodeInternal(
         // Allocate a new measurement cache entry.
         newCacheEntry =
             &layout->cachedMeasurements[layout->nextCachedMeasurementsIndex];
+        // rive: whether anything in this measurement was sized to the space
+        // it was offered, and whether it holds a container with children
+        // that measures as nothing, this one included.
+        if (!node->getChildren().empty() &&
+            (YGFloatsEqual(
+                 layout->measuredDimensions[YGDimensionWidth], 0.0f) ||
+             YGFloatsEqual(
+                 layout->measuredDimensions[YGDimensionHeight], 0.0f))) {
+          layoutMarkerData.emptyContainerMeasures++;
+        }
+        const uint8_t bit =
+            static_cast<uint8_t>(1u << layout->nextCachedMeasurementsIndex);
+        const uint8_t clear = static_cast<uint8_t>(~bit);
+        layout->limitDependentMeasurements =
+            layoutMarkerData.limitDependentMeasures != limitDependentMeasures
+            ? layout->limitDependentMeasurements | bit
+            : layout->limitDependentMeasurements & clear;
+        layout->emptyContainerMeasurements =
+            layoutMarkerData.emptyContainerMeasures != emptyContainerMeasures
+            ? layout->emptyContainerMeasurements | bit
+            : layout->emptyContainerMeasurements & clear;
         layout->nextCachedMeasurementsIndex++;
       }
 
